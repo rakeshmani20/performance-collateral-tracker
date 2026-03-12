@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Collateral Size Tracker — Oro Corp</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0A0A0A; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .tab-btn { background: transparent; cursor: pointer; transition: all 0.15s; font-family: 'DM Mono', monospace; letter-spacing: 0.05em; border: none; border-bottom: 2px solid transparent; padding: 10px 20px; font-size: 12px; color: #555; }
+    .tab-btn:hover { color: #888; }
+    .tab-btn.active-meta   { border-bottom-color: #0866FF; color: #0866FF; background: rgba(8,102,255,0.04); }
+    .tab-btn.active-whatsapp { border-bottom-color: #25D366; color: #25D366; background: rgba(37,211,102,0.04); }
+    .tab-btn.active-google { border-bottom-color: #EA4335; color: #EA4335; background: rgba(234,67,53,0.04); }
+    .row { transition: background 0.1s; }
+    .row:hover { background: rgba(255,255,255,0.04) !important; }
+    input::placeholder { color: #444; }
+    input { outline: none; }
+    .badge { font-size: 10px; padding: 2px 8px; border-radius: 100px; font-family: 'DM Mono', monospace; letter-spacing: 0.08em; font-weight: 500; }
+    .copy-btn { opacity: 0; transition: opacity 0.15s; background: #1a1a1a; border: 1px solid #2a2a2a; color: #888; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-family: 'DM Mono', monospace; }
+    .row:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { background: #222; color: #ccc; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeIn 0.2s ease forwards; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a1a; border: 1px solid #2a2a2a; color: #aaa; padding: 10px 18px; border-radius: 8px; font-size: 12px; font-family: 'DM Mono', monospace; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="toast" id="toast">Copied to clipboard</div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const platforms = {
+      meta: {
+        label: "Meta",
+        color: "#0866FF",
+        formats: [
+          { name: "Feed Image (Square)",     dimensions: "1080 × 1080 px",        ratio: "1:1",       fileSize: "30 MB",                       type: "Image" },
+          { name: "Feed Image (Landscape)",  dimensions: "1200 × 628 px",         ratio: "1.91:1",    fileSize: "30 MB",                       type: "Image" },
+          { name: "Feed Image (Portrait)",   dimensions: "1080 × 1350 px",        ratio: "4:5",       fileSize: "30 MB",                       type: "Image" },
+          { name: "Stories / Reels",         dimensions: "1080 × 1920 px",        ratio: "9:16",      fileSize: "4 GB (video) / 30 MB (image)", type: "Image + Video" },
+          { name: "Carousel Card",           dimensions: "1080 × 1080 px",        ratio: "1:1",       fileSize: "30 MB per card",              type: "Image" },
+          { name: "Feed Video",              dimensions: "1080 × 1080 px",        ratio: "1:1",       fileSize: "4 GB",                        type: "Video" },
+          { name: "In-Stream Video",         dimensions: "1280 × 720 px",         ratio: "16:9",      fileSize: "4 GB",                        type: "Video" },
+        ]
+      },
+      whatsapp: {
+        label: "WhatsApp",
+        color: "#25D366",
+        formats: [
+          { name: "Image Message",           dimensions: "800 × 800 px",          ratio: "1:1",       fileSize: "5 MB",   type: "Image" },
+          { name: "Image (Wide)",            dimensions: "1200 × 628 px",         ratio: "1.91:1",    fileSize: "5 MB",   type: "Image" },
+          { name: "Video Message",           dimensions: "Any (720p recommended)", ratio: "Any",      fileSize: "16 MB",  type: "Video" },
+          { name: "Document / PDF",          dimensions: "N/A",                   ratio: "N/A",       fileSize: "100 MB", type: "Document" },
+          { name: "Status (Image)",          dimensions: "1080 × 1920 px",        ratio: "9:16",      fileSize: "5 MB",   type: "Image" },
+          { name: "Status (Video)",          dimensions: "1080 × 1920 px",        ratio: "9:16",      fileSize: "16 MB",  type: "Video" },
+        ]
+      },
+      google: {
+        label: "Google Display",
+        color: "#EA4335",
+        formats: [
+          { name: "Medium Rectangle",        dimensions: "300 × 250 px",          ratio: "1.2:1",     fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Leaderboard",             dimensions: "728 × 90 px",           ratio: "8.09:1",    fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Wide Skyscraper",         dimensions: "160 × 600 px",          ratio: "4:15",      fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Large Rectangle",         dimensions: "336 × 280 px",          ratio: "1.2:1",     fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Half Page",               dimensions: "300 × 600 px",          ratio: "1:2",       fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Billboard",               dimensions: "970 × 250 px",          ratio: "3.88:1",    fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Mobile Banner",           dimensions: "320 × 50 px",           ratio: "6.4:1",     fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Large Mobile Banner",     dimensions: "320 × 100 px",          ratio: "3.2:1",     fileSize: "150 KB", type: "Image / HTML5" },
+          { name: "Responsive Display Ad",   dimensions: "Various (auto-fit)",    ratio: "Various",   fileSize: "5 MB",   type: "Responsive" },
+        ]
+      }
+    };
+
+    const typeColors = {
+      "Image":          "#3B82F6",
+      "Video":          "#8B5CF6",
+      "Image + Video":  "#EC4899",
+      "Document":       "#F59E0B",
+      "Image / HTML5":  "#10B981",
+      "Responsive":     "#6366F1",
+    };
+
+    function showToast() {
+      const t = document.getElementById("toast");
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 1800);
+    }
+
+    function App() {
+      const [active, setActive] = useState("meta");
+      const [search, setSearch] = useState("");
+
+      const platform = platforms[active];
+      const filtered = platform.formats.filter(f =>
+        f.name.toLowerCase().includes(search.toLowerCase()) ||
+        f.type.toLowerCase().includes(search.toLowerCase())
+      );
+
+      const totalFormats = Object.values(platforms).reduce((a, p) => a + p.formats.length, 0);
+
+      return (
+        <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#0A0A0A", minHeight: "100vh", color: "#E8E8E8" }}>
+          {/* Header */}
+          <div style={{ padding: "40px 48px 0", borderBottom: "1px solid #1a1a1a" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "32px" }}>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: "0.2em", color: "#555", marginBottom: 8, fontFamily: "'Space Grotesk', sans-serif", textTransform: "uppercase" }}>
+                  Oro Corp — Performance Marketing
+                </div>
+                <h1 style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: "#fff", letterSpacing: "-0.02em" }}>
+                  Collateral Size Reference
+                </h1>
+              </div>
+              <div style={{ fontSize: 11, color: "#444", textAlign: "right", fontFamily: "'DM Mono', monospace" }}>
+                <div>{totalFormats} formats</div>
+                <div>3 platforms</div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 4 }}>
+              {Object.entries(platforms).map(([key, p]) => (
+                <button
+                  key={key}
+                  className={`tab-btn ${active === key ? `active-${key}` : ""}`}
+                  onClick={() => { setActive(key); setSearch(""); }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div style={{ padding: "32px 48px" }}>
+            {/* Search */}
+            <div style={{ marginBottom: 24, position: "relative" }}>
+              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#444", fontSize: 16 }}>⌕</span>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Filter formats..."
+                style={{ background: "#111", border: "1px solid #222", borderRadius: 8, padding: "10px 14px 10px 38px", fontSize: 12, color: "#ccc", width: 280 }}
+              />
+            </div>
+
+            {/* Table */}
+            <div style={{ border: "1px solid #1a1a1a", borderRadius: 12, overflow: "hidden" }}>
+              {/* Header Row */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.6fr 0.8fr 1.2fr 1fr", background: "#0f0f0f", padding: "12px 20px", borderBottom: "1px solid #1a1a1a" }}>
+                {["Format", "Dimensions", "Ratio", "Max File Size", "Type"].map(h => (
+                  <div key={h} style={{ fontSize: 10, letterSpacing: "0.12em", color: "#444", textTransform: "uppercase" }}>{h}</div>
+                ))}
+              </div>
+
+              {/* Data Rows */}
+              {filtered.map((f, i) => (
+                <div
+                  key={`${active}-${i}`}
+                  className="row animate-in"
+                  style={{ display: "grid", gridTemplateColumns: "2fr 1.6fr 0.8fr 1.2fr 1fr", padding: "15px 20px", borderBottom: i < filtered.length - 1 ? "1px solid #141414" : "none", animationDelay: `${i * 0.025}s` }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: 500 }}>{f.name}</span>
+                    <button
+                      className="copy-btn"
+                      onClick={() => { navigator.clipboard.writeText(`${f.name}: ${f.dimensions} | Max ${f.fileSize}`); showToast(); }}
+                    >
+                      copy
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 13, color: "#aaa" }}>{f.dimensions}</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>{f.ratio}</div>
+                  <div style={{ fontSize: 13, color: platform.color, fontWeight: 500 }}>{f.fileSize}</div>
+                  <div>
+                    <span className="badge" style={{ background: `${typeColors[f.type]}18`, color: typeColors[f.type], border: `1px solid ${typeColors[f.type]}33` }}>
+                      {f.type}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {filtered.length === 0 && (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "#444", fontSize: 13 }}>
+                  No formats match "{search}"
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 20, fontSize: 11, color: "#333", display: "flex", gap: 24 }}>
+              <span>File sizes are maximums.</span>
+              <span>Hover a row to copy specs.</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
